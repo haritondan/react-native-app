@@ -1,6 +1,14 @@
 import PropTypes from 'prop-types';
-import React, { useState } from 'react';
-import { signInWithEmailAndPassword } from 'firebase/auth';
+// eslint-disable-next-line import/no-extraneous-dependencies
+import * as WebBrowser from 'expo-web-browser';
+import React, { useState, useEffect } from 'react';
+// eslint-disable-next-line import/no-extraneous-dependencies
+import * as Google from 'expo-auth-session/providers/google';
+import {
+  signInWithEmailAndPassword,
+  signInWithCredential,
+  GoogleAuthProvider,
+} from 'firebase/auth';
 import {
   Text,
   View,
@@ -15,15 +23,34 @@ import {
 import { auth } from '../config/firebase';
 import { colors } from '../config/constants';
 
+WebBrowser.maybeCompleteAuthSession();
+
 export default function Login({ navigation }) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
 
+  // Google Auth Request
+  const [request, response, promptAsync] = Google.useAuthRequest({
+    expoClientId: '922081516086-cf5k8eqeqfmth8q3eshva7ec30lhpqjm.apps.googleusercontent.com ',
+    iosClientId: '922081516086-0qpe5vlvukghdo7gcgnunrkf03ei1rue.apps.googleusercontent.com',
+    androidClientId: 'YOUR_ANDROID_CLIENT_ID.apps.googleusercontent.com',
+  });
+
+  useEffect(() => {
+    if (response?.type === 'success') {
+      const { id_token } = response.params;
+      const credential = GoogleAuthProvider.credential(id_token);
+      signInWithCredential(auth, credential)
+        .then(() => console.log('Google login success'))
+        .catch((err) => Alert.alert('Google Login Error', err.message));
+    }
+  }, [response]);
+
   const onHandleLogin = () => {
     if (email !== '' && password !== '') {
       signInWithEmailAndPassword(auth, email, password)
-        .then(() => console.log('Login success'))
-        .catch((err) => Alert.alert('Login error', err.message));
+        .then(() => console.log('Email login success'))
+        .catch((err) => Alert.alert('Login Error', err.message));
     }
   };
 
@@ -53,20 +80,22 @@ export default function Login({ navigation }) {
           onChangeText={(text) => setPassword(text)}
         />
         <TouchableOpacity style={styles.button} onPress={onHandleLogin}>
-          <Text style={{ fontWeight: 'bold', color: '#fff', fontSize: 18 }}> Log In</Text>
+          <Text style={styles.buttonText}>Log In</Text>
         </TouchableOpacity>
-        <View
-          style={{ marginTop: 30, flexDirection: 'row', alignItems: 'center', alignSelf: 'center' }}
+
+        {/* Google Sign In Button */}
+        <TouchableOpacity
+          style={[styles.button, styles.googleButton]}
+          onPress={() => promptAsync()}
+          disabled={!request}
         >
-          <Text style={{ color: 'gray', fontWeight: '600', fontSize: 14 }}>
-            Don&apos;t have an account? &nbsp;
-          </Text>
-          <TouchableOpacity
-            onPress={() => {
-              navigation.navigate('SignUp');
-            }}
-          >
-            <Text style={{ color: colors.pink, fontWeight: '600', fontSize: 14 }}> Sign Up</Text>
+          <Text style={styles.googleButtonText}>Sign in with Google</Text>
+        </TouchableOpacity>
+
+        <View style={styles.bottomText}>
+          <Text style={styles.bottomTextLabel}>Don&apos;t have an account? </Text>
+          <TouchableOpacity onPress={() => navigation.navigate('SignUp')}>
+            <Text style={styles.linkText}>Sign Up</Text>
           </TouchableOpacity>
         </View>
       </SafeAreaView>
@@ -74,14 +103,35 @@ export default function Login({ navigation }) {
     </View>
   );
 }
+
+Login.propTypes = {
+  navigation: PropTypes.object.isRequired,
+};
+
 const styles = StyleSheet.create({
+  bottomText: {
+    alignItems: 'center',
+    alignSelf: 'center',
+    flexDirection: 'row',
+    marginTop: 30,
+  },
+  bottomTextLabel: {
+    color: 'gray',
+    fontSize: 14,
+    fontWeight: '600',
+  },
   button: {
     alignItems: 'center',
     backgroundColor: colors.primary,
     borderRadius: 10,
     height: 58,
     justifyContent: 'center',
-    marginTop: 40,
+    marginTop: 20,
+  },
+  buttonText: {
+    color: '#fff',
+    fontSize: 18,
+    fontWeight: 'bold',
   },
   container: {
     backgroundColor: '#fff',
@@ -92,6 +142,14 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     marginHorizontal: 30,
   },
+  googleButton: {
+    backgroundColor: '#4285F4',
+  },
+  googleButtonText: {
+    color: '#fff',
+    fontSize: 18,
+    fontWeight: 'bold',
+  },
   input: {
     backgroundColor: '#F6F7FB',
     borderRadius: 10,
@@ -99,6 +157,11 @@ const styles = StyleSheet.create({
     height: 58,
     marginBottom: 20,
     padding: 12,
+  },
+  linkText: {
+    color: colors.pink,
+    fontSize: 14,
+    fontWeight: '600',
   },
   title: {
     alignSelf: 'center',
@@ -116,7 +179,3 @@ const styles = StyleSheet.create({
     width: '100%',
   },
 });
-
-Login.propTypes = {
-  navigation: PropTypes.object.isRequired,
-};
