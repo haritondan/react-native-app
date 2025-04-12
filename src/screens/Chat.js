@@ -10,6 +10,7 @@ import { ref, getStorage, getDownloadURL, uploadBytesResumable } from 'firebase/
 import {
   View,
   Text,
+  Alert,
   Keyboard,
   StyleSheet,
   TouchableOpacity,
@@ -103,7 +104,6 @@ function Chat({ route }) {
         setUserLanguage(userDoc.data().language || 'en');
       }
     };
-
     fetchUserLanguage();
   }, []);
 
@@ -115,15 +115,21 @@ function Chat({ route }) {
 
     const unsubscribe = onSnapshot(doc(database, 'chats', route.params.id), async (document) => {
       const userLang = await fetchUserLanguage();
-      const chatMessages = document.data().messages.map(async (message) => {
-        if (message.language !== userLang) {
-          const translatedText = await translateText(message.originalText, userLang);
-          return { ...message, translatedText };
-        }
-        return message;
-      });
 
-      Promise.all(chatMessages).then(setMessages);
+      const chatMessages = await Promise.all(
+        document.data().messages.map(async (message) => {
+          const createdAt = message.createdAt?.toDate?.() || new Date();
+
+          if (message.language !== userLang) {
+            const translatedText = await translateText(message.originalText, userLang);
+            return { ...message, translatedText, createdAt };
+          }
+
+          return { ...message, createdAt };
+        })
+      );
+
+      setMessages(chatMessages);
     });
 
     return () => unsubscribe();
@@ -145,7 +151,7 @@ function Chat({ route }) {
       const data = await response.json();
       return data.translatedText || text;
     } catch (error) {
-      console.error('Fetch error:', error);
+      console.error('Translation error:', error);
       return text;
     }
   };
@@ -156,21 +162,20 @@ function Chat({ route }) {
 
       const originalText = m[0].text;
 
-      // Get recipient's language (assuming they are in the chat)
       const chatDoc = await getDoc(doc(database, 'chats', route.params.id));
       const chatData = chatDoc.data();
-      const receiverLanguage = chatData?.receiverLanguage || 'en'; // Default to English
+      const receiverLanguage = chatData?.receiverLanguage || 'en';
 
-      // Translate message if needed
       const translatedText = await translateText(originalText, receiverLanguage);
 
       const messageWithTranslation = {
         ...m[0],
         sent: true,
         received: false,
-        originalText, // Store original text
-        translatedText, // Store translated text
-        language: receiverLanguage, // Store the receiver's language
+        originalText,
+        translatedText,
+        language: receiverLanguage,
+        createdAt: new Date(),
       };
 
       const chatMessages = GiftedChat.append(chatData.messages || [], [messageWithTranslation]);
@@ -216,14 +221,8 @@ function Chat({ route }) {
 
     uploadTask.on(
       'state_changed',
-      (snapshot) => {
-        const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
-        console.log(`Upload is ${progress}% done`);
-      },
-      (error) => {
-        // Handle unsuccessful uploads
-        console.log(error);
-      },
+      null,
+      (error) => console.log(error),
       async () => {
         const downloadUrl = await getDownloadURL(uploadTask.snapshot.ref);
         setUploading(false);
@@ -245,20 +244,84 @@ function Chat({ route }) {
 
   const handleEmojiPanel = useCallback(() => {
     setModal((prevModal) => {
-      if (prevModal) {
-        // If the modal is already open, close it
-        Keyboard.dismiss();
-        return false;
-      }
-      // If the modal is closed, open it
       Keyboard.dismiss();
-      return true;
+      return !prevModal;
     });
   }, []);
+
+  // 🔍 Analyze sentiment of today's messages
+  // const analyzeTodayMessages = async () => {
+  //   const today = new Date();
+  //   today.setHours(0, 0, 0, 0);
+
+  //   const todayMessages = messages
+  //     .filter((msg) => msg.createdAt >= today && msg.text)
+  //     .map((msg) => msg.originalText || msg.text);
+
+  //   if (todayMessages.length === 0) {
+  //     Alert.alert('Sentiment Analysis', 'No messages from today to analyze.');
+  //     return;
+  //   }
+
+  //   try {
+  //     const response = await fetch('http://your-api.com/analyze_sentiment', {
+  //       method: 'POST',
+  //       headers: {
+  //         'Content-Type': 'application/json',
+  //       },
+  //       body: JSON.stringify({ messages: todayMessages }),
+  //     });
+
+  //     const data = await response.json();
+  //     Alert.alert('Sentiment Analysis', `Today's chat sentiment is: ${data.sentiment}`);
+  //   } catch (error) {
+  //     console.error('Sentiment analysis error:', error);
+  //     Alert.alert('Sentiment Analysis', 'Error analyzing sentiment.');
+  //   }
+  // };
+
+  const analyzeTodayMessages = async () => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    const todayMessages = messages
+      .filter((msg) => msg.createdAt >= today && msg.text)
+      .map((msg) => msg.originalText || msg.text);
+
+    if (todayMessages.length === 0) {
+      Alert.alert('Sentiment Analysis', 'No messages from today to analyze.');
+      return;
+    }
+
+    try {
+      // 🧪 MOCKED response (instead of calling real API)
+      console.log('[Mock] Analyzing:', todayMessages);
+
+      // Fake logic: if any message contains "sad", return negative
+      let sentiment = 'neutral';
+      if (todayMessages.some((text) => text.toLowerCase().includes('sad'))) {
+        sentiment = 'negative';
+      } else if (todayMessages.some((text) => text.toLowerCase().includes('love'))) {
+        sentiment = 'positive';
+      }
+
+      // Show popup with fake result
+      Alert.alert('Sentiment Analysis', `Mocked sentiment result: ${sentiment}`);
+    } catch (error) {
+      console.error('Sentiment mock error:', error);
+      Alert.alert('Sentiment Analysis', 'Error analyzing sentiment.');
+    }
+  };
 
   return (
     <>
       {uploading && RenderLoadingUpload()}
+
+      {/* ➕ Floating Button to Trigger Sentiment Analysis */}
+      <TouchableOpacity style={styles.sentimentButton} onPress={analyzeTodayMessages}>
+        <Ionicons name="stats-chart" size={24} color="white" />
+      </TouchableOpacity>
+
       <GiftedChat
         messages={messages}
         showAvatarForEveryMessage={false}
@@ -379,6 +442,15 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     marginRight: 8,
     width: 44,
+  },
+  sentimentButton: {
+    backgroundColor: colors.teal,
+    borderRadius: 28,
+    padding: 10,
+    position: 'absolute',
+    right: 20,
+    top: 20,
+    zIndex: 999,
   },
 });
 
