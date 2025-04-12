@@ -104,7 +104,10 @@ const Group = () => {
       groupName,
       groupAdmins: [auth?.currentUser?.email],
     }).then(() => {
-      navigation.navigate('Chat', { id: newRef.id, chatName: groupName });
+      // Go back to chat list instead of entering the new group chat
+      navigation.goBack();
+
+      // Clear modal and selections
       deSelectItems();
       setModalVisible(false);
       setGroupName('');
@@ -144,22 +147,27 @@ const Group = () => {
         </TouchableOpacity>
       )}
       <Modal
-        animationType="slide"
+        animationType="fade"
         transparent
         visible={modalVisible}
         onRequestClose={() => {
           setModalVisible(!modalVisible);
         }}
       >
-        <View style={styles.modalView}>
-          <Text style={styles.modalText}>Enter Group Name</Text>
-          <TextInput
-            style={styles.input}
-            onChangeText={setGroupName}
-            value={groupName}
-            placeholder="Group Name"
-            onSubmitEditing={handleCreateGroup} // Create group on submit
-          />
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalView}>
+            <Text style={styles.modalText}>Enter Group Name</Text>
+            <TextInput
+              style={styles.input}
+              onChangeText={setGroupName}
+              value={groupName}
+              placeholder="Group Name"
+              onSubmitEditing={handleCreateGroup}
+            />
+            <TouchableOpacity style={styles.createButton} onPress={handleCreateGroup}>
+              <Text style={styles.createButtonText}>Create</Text>
+            </TouchableOpacity>
+          </View>
         </View>
       </Modal>
     </Pressable>
@@ -175,6 +183,18 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
   },
+  createButton: {
+    backgroundColor: colors.teal,
+    borderRadius: 10,
+    marginTop: 10,
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+  },
+  createButtonText: {
+    color: 'white',
+    fontSize: 16,
+    fontWeight: 'bold',
+  },
   fab: {
     bottom: 12,
     position: 'absolute',
@@ -186,13 +206,14 @@ const styles = StyleSheet.create({
     borderRadius: 28,
     height: 56,
     justifyContent: 'center',
+    margin: 10,
     width: 56,
   },
   input: {
     borderColor: 'gray',
     borderWidth: 1,
     height: 40,
-    marginBottom: 15,
+    marginBottom: 5,
     paddingHorizontal: 10,
     width: '100%',
   },
@@ -200,8 +221,15 @@ const styles = StyleSheet.create({
     color: colors.teal,
     fontSize: 18,
     fontWeight: '400',
-    right: 10,
+    right: 20,
   },
+  modalOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    alignItems: 'center',
+    backgroundColor: 'rgba(0,0,0,0.5)', // dark transparent background
+    justifyContent: 'center',
+  },
+
   modalText: {
     fontSize: 20,
     fontWeight: 'bold',
@@ -213,8 +241,9 @@ const styles = StyleSheet.create({
     backgroundColor: 'white',
     borderRadius: 20,
     elevation: 5,
-    margin: 20,
-    padding: 35,
+    marginTop: -105,
+    padding: 25,
+    width: '80%',
   },
   selectedContactRow: {
     backgroundColor: '#E0E0E0',

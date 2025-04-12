@@ -388,7 +388,7 @@ const styles = StyleSheet.create({
   },
   emojiIcon: {
     borderRadius: 16,
-    bottom: 8,
+    bottom: 5,
     height: 32,
     marginLeft: 4,
     width: 32,
@@ -446,10 +446,10 @@ const styles = StyleSheet.create({
   sentimentButton: {
     backgroundColor: colors.teal,
     borderRadius: 28,
+    left: 5,
     padding: 10,
     position: 'absolute',
-    right: 20,
-    top: 20,
+    top: 300,
     zIndex: 999,
   },
 });
