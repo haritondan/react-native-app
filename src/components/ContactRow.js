@@ -54,7 +54,7 @@ const ContactRow = ({
 const styles = StyleSheet.create({
   avatar: {
     alignItems: 'center',
-    backgroundColor: colors.primary,
+    backgroundColor: colors.teal,
     borderRadius: 28,
     height: 56,
     justifyContent: 'center',

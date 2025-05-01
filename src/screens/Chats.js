@@ -219,7 +219,7 @@ const Chats = ({ setUnreadCount }) => {
     } else if (message.text.length > 20) {
       messageText = `${message.text.substring(0, 20)}...`;
     } else {
-      messageText = message.text;
+      messageText = message.text; // translate this too
     }
 
     return `${userName}: ${messageText}`;

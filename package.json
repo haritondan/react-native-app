@@ -2,7 +2,7 @@
   "name": "react-native-chat",
   "version": "1.0.0",
   "main": "./src/App.js",
-  "scheme": "yourapp",
+  "scheme": "",
   "scripts": {
     "start": "expo start",
     "android": "expo run:android",
@@ -30,6 +30,7 @@
     "expo-constants": "~17.0.8",
     "expo-crypto": "~14.0.2",
     "expo-device": "~7.0.2",
+    "expo-file-system": "~18.0.12",
     "expo-image-picker": "~16.0.4",
     "expo-notifications": "~0.29.12",
     "expo-random": "^14.0.1",

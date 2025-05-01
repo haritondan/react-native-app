@@ -20,6 +20,8 @@ import {
 import { colors } from '../config/constants';
 import { auth, database } from '../config/firebase';
 
+const link = 'http://192.168.1.7:8080';
+
 const RenderLoadingUpload = () => (
   <View style={styles.loadingContainerUpload}>
     <ActivityIndicator size="large" color={colors.teal} />
@@ -37,7 +39,7 @@ const RenderBubble = (props) => (
     {...props}
     wrapperStyle={{
       right: { backgroundColor: colors.primary },
-      left: { backgroundColor: 'black' },
+      left: { backgroundColor: '#1a1818' },
     }}
     renderMessageText={(bubbleProps) => (
       <View>
@@ -134,10 +136,41 @@ function Chat({ route }) {
 
     return () => unsubscribe();
   }, [route.params.id]);
+  // useEffect(() => {
+  //   const fetchUserLanguage = async () => {
+  //     const userDoc = await getDoc(doc(database, 'users', auth?.currentUser?.email));
+  //     return userDoc.exists() ? userDoc.data().language : 'en';
+  //   };
+
+  //   const unsubscribe = onSnapshot(doc(database, 'chats', route.params.id), async (document) => {
+  //     const userLang = await fetchUserLanguage();
+
+  //     const chatMessages = await Promise.all(
+  //       document.data().messages.map(async (message) => {
+  //         const createdAt = message.createdAt?.toDate?.() || new Date();
+
+  //         // Check if translation is needed
+  //         if (message.language !== userLang) {
+  //           // If message already has translatedText for this language, skip translation
+  //           if (!message.translatedText) {
+  //             const translatedText = await translateText(message.originalText, userLang);
+  //             return { ...message, translatedText, createdAt };
+  //           }
+  //         }
+
+  //         return { ...message, createdAt };
+  //       })
+  //     );
+
+  //     setMessages(chatMessages);
+  //   });
+
+  //   return () => unsubscribe();
+  // }, [route.params.id]);
 
   const translateText = async (text, targetLanguage) => {
     try {
-      const response = await fetch('http://192.168.1.7:8080/translate_message', {
+      const response = await fetch(`${link}/translate_message`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -249,37 +282,6 @@ function Chat({ route }) {
     });
   }, []);
 
-  // 🔍 Analyze sentiment of today's messages
-  // const analyzeTodayMessages = async () => {
-  //   const today = new Date();
-  //   today.setHours(0, 0, 0, 0);
-
-  //   const todayMessages = messages
-  //     .filter((msg) => msg.createdAt >= today && msg.text)
-  //     .map((msg) => msg.originalText || msg.text);
-
-  //   if (todayMessages.length === 0) {
-  //     Alert.alert('Sentiment Analysis', 'No messages from today to analyze.');
-  //     return;
-  //   }
-
-  //   try {
-  //     const response = await fetch('http://your-api.com/analyze_sentiment', {
-  //       method: 'POST',
-  //       headers: {
-  //         'Content-Type': 'application/json',
-  //       },
-  //       body: JSON.stringify({ messages: todayMessages }),
-  //     });
-
-  //     const data = await response.json();
-  //     Alert.alert('Sentiment Analysis', `Today's chat sentiment is: ${data.sentiment}`);
-  //   } catch (error) {
-  //     console.error('Sentiment analysis error:', error);
-  //     Alert.alert('Sentiment Analysis', 'Error analyzing sentiment.');
-  //   }
-  // };
-
   const analyzeTodayMessages = async () => {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
@@ -294,24 +296,58 @@ function Chat({ route }) {
     }
 
     try {
-      // 🧪 MOCKED response (instead of calling real API)
-      console.log('[Mock] Analyzing:', todayMessages);
+      const response = await fetch(`${link}/predict_sentiment`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ messages: todayMessages }),
+      });
 
-      // Fake logic: if any message contains "sad", return negative
-      let sentiment = 'neutral';
-      if (todayMessages.some((text) => text.toLowerCase().includes('sad'))) {
-        sentiment = 'negative';
-      } else if (todayMessages.some((text) => text.toLowerCase().includes('love'))) {
-        sentiment = 'positive';
-      }
-
-      // Show popup with fake result
-      Alert.alert('Sentiment Analysis', `Mocked sentiment result: ${sentiment}`);
+      const data = await response.json();
+      Alert.alert(
+        'Sentiment Analysis',
+        `Today's chat sentiment is: ${data.positive}% positive, ${data.neutral}% neutral and ${data.negative}% negative`
+      );
     } catch (error) {
-      console.error('Sentiment mock error:', error);
+      console.error('Sentiment analysis error:', error);
+      console.log(todayMessages);
       Alert.alert('Sentiment Analysis', 'Error analyzing sentiment.');
     }
   };
+
+  // const analyzeTodayMessages = async () => {
+  //   const today = new Date();
+  //   today.setHours(0, 0, 0, 0);
+
+  //   const todayMessages = messages
+  //     .filter((msg) => msg.createdAt >= today && msg.text)
+  //     .map((msg) => msg.originalText || msg.text);
+
+  //   if (todayMessages.length === 0) {
+  //     Alert.alert('Sentiment Analysis', 'No messages from today to analyze.');
+  //     return;
+  //   }
+
+  //   try {
+  //     // 🧪 MOCKED response (instead of calling real API)
+  //     console.log('[Mock] Analyzing:', todayMessages);
+
+  //     // Fake logic: if any message contains "sad", return negative
+  //     let sentiment = 'neutral';
+  //     if (todayMessages.some((text) => text.toLowerCase().includes('sad'))) {
+  //       sentiment = 'negative';
+  //     } else if (todayMessages.some((text) => text.toLowerCase().includes('love'))) {
+  //       sentiment = 'positive';
+  //     }
+
+  //     // Show popup with fake result
+  //     Alert.alert('Sentiment Analysis', `Mocked sentiment result: ${sentiment}`);
+  //   } catch (error) {
+  //     console.error('Sentiment mock error:', error);
+  //     Alert.alert('Sentiment Analysis', 'Error analyzing sentiment.');
+  //   }
+  // };
 
   return (
     <>
