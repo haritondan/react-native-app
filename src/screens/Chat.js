@@ -16,12 +16,12 @@ import {
   StyleSheet,
   TouchableOpacity,
   ActivityIndicator,
+  Platform
 } from 'react-native';
 
 import { colors } from '../config/constants';
 import { auth, database } from '../config/firebase';
-
-const link = 'http://192.168.1.7:8080';
+const link = "https://0196-195-22-251-42.ngrok-free.app";
 
 const RenderLoadingUpload = () => (
   <View style={styles.loadingContainerUpload}>
@@ -218,7 +218,6 @@ function Chat({ route }) {
       console.error('Error stopping recording:', error);
     }
   };
-
   const sendAudioMessage = async (uri) => {
     const chatDoc = await getDoc(doc(database, 'chats', route.params.id));
     const chatData = chatDoc.data();
@@ -226,41 +225,35 @@ function Chat({ route }) {
 
     const formData = new FormData();
     formData.append('file', {
-      uri,
+      uri: Platform.OS === 'ios' ? uri.replace('file://', '') : uri, 
       name: 'voice_message.wav',
+      type: 'audio/wav',
     });
     formData.append('requested_language', receiverLanguage);
     console.log(formData);
     try {
-      let translatedText = ''; // default fallback
+      const response = await fetch(`${link}/voice_to_text`, {
+        method: 'POST',
+        body: formData,
+        headers: { 'Content-Type': 'multipart/form-data' },
+      });
 
-      try {
-        const response = await fetch(`${link}/voice_to_text`, {
-          method: 'POST',
-          body: formData,
-        });
-
-        const text = await response.text();
-
-        if (text.startsWith('<')) {
-          console.error('Server returned HTML:', text);
-          throw new Error('Expected JSON but got HTML');
-        }
-
-        const data = JSON.parse(text);
-        translatedText = data?.text || '';
-      } catch (error) {
-        console.error('Voice translation failed:', error);
-        translatedText = ''; // ensures it's never undefined
+      if (!response.ok) {
+        const errorBody = await response.text();
+        throw new Error(
+          `Server returned ${response.status}: ${errorBody.slice(0, 200)}`
+        );
       }
+
+      const { translated_text = '', original = '' } = await response.json();
 
       const newMessage = {
         _id: uuid.v4(),
         createdAt: new Date(),
-        text: translatedText,
+        text: translated_text,          
         audio: uri,
-        originalText: '',
-        translatedText,
+        originalText: original,
+        translatedText: translated_text,
         language: receiverLanguage,
         user: {
           _id: auth?.currentUser?.email,
@@ -268,18 +261,18 @@ function Chat({ route }) {
         },
       };
 
-      const chatMessages = GiftedChat.append(chatData.messages || [], [newMessage]);
+      const chatMessages = GiftedChat.append(
+        chatData.messages || [],
+        [newMessage]
+      );
 
       await setDoc(
         doc(database, 'chats', route.params.id),
-        {
-          messages: chatMessages,
-          lastUpdated: Date.now(),
-        },
+        { messages: chatMessages, lastUpdated: Date.now() },
         { merge: true }
       );
-    } catch (error) {
-      console.error('Voice translation failed:', error);
+    } catch (err) {
+      console.error('Voice translation failed:', err);
     }
   };
 
