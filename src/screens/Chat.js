@@ -1,3 +1,4 @@
+import { Audio } from 'expo-av';
 import PropTypes from 'prop-types';
 import uuid from 'react-native-uuid';
 import { Ionicons } from '@expo/vector-icons';
@@ -34,6 +35,57 @@ const RenderLoading = () => (
   </View>
 );
 
+const RenderMessageAudio = ({ currentMessage }) => {
+  const [sound, setSound] = useState(null);
+  const [isPlaying, setIsPlaying] = useState(false);
+
+  const playSound = async () => {
+    if (!currentMessage.audio) return;
+
+    try {
+      const { sound: playbackSound } = await Audio.Sound.createAsync({ uri: currentMessage.audio });
+
+      setSound(sound);
+      setIsPlaying(true);
+      await playbackSound.playAsync();
+
+      playbackSound.setOnPlaybackStatusUpdate((status) => {
+        if (status.didJustFinish) {
+          setIsPlaying(false);
+          playbackSound.unloadAsync();
+        }
+      });
+    } catch (err) {
+      console.error('Playback error:', err);
+    }
+  };
+
+  return (
+    <TouchableOpacity
+      onPress={playSound}
+      style={{
+        flexDirection: 'row',
+        justifyContent: 'space-evenly',
+        alignItems: 'center',
+        paddingTop: 5,
+        backgroundColor: colors.primary,
+        borderRadius: 10,
+        color: 'white',
+        paddingHorizontal: 10,
+      }}
+    >
+      <Ionicons name={isPlaying ? 'pause-circle' : 'play-circle'} size={36} color={colors.teal} />
+      <Text style={{ fontSize: 10, color: 'white', padding: 10 }}>Audio Message</Text>
+    </TouchableOpacity>
+  );
+};
+
+RenderMessageAudio.propTypes = {
+  currentMessage: PropTypes.shape({
+    audio: PropTypes.string,
+  }).isRequired,
+};
+
 const RenderBubble = (props) => (
   <Bubble
     {...props}
@@ -62,7 +114,30 @@ const RenderAttach = (props) => (
   </TouchableOpacity>
 );
 
-const RenderInputToolbar = (props, handleEmojiPanel) => (
+// const RenderInputToolbar = (props, handleEmojiPanel) => (
+//   <View
+//     style={{
+//       flexDirection: 'row',
+//       alignItems: 'center',
+//       paddingVertical: 40,
+//       paddingTop: 10,
+//       backgroundColor: 'white',
+//     }}
+//   >
+//     <InputToolbar
+//       {...props}
+//       renderActions={() => RenderActions(handleEmojiPanel)}
+//       containerStyle={styles.inputToolbar}
+//     />
+//     <Send {...props}>
+//       <View style={styles.sendIconContainer}>
+//         <Ionicons name="send" size={24} color={colors.teal} />
+//       </View>
+//     </Send>
+//   </View>
+// );
+
+const RenderInputToolbar = (props, handleEmojiPanel, recording, startRecording, stopRecording) => (
   <View
     style={{
       flexDirection: 'row',
@@ -77,6 +152,16 @@ const RenderInputToolbar = (props, handleEmojiPanel) => (
       renderActions={() => RenderActions(handleEmojiPanel)}
       containerStyle={styles.inputToolbar}
     />
+    <TouchableOpacity
+      onPress={recording ? stopRecording : startRecording}
+      style={styles.sendIconContainer}
+    >
+      <Ionicons
+        name={recording ? 'stop-circle-outline' : 'mic-outline'}
+        size={24}
+        color={colors.teal}
+      />
+    </TouchableOpacity>
     <Send {...props}>
       <View style={styles.sendIconContainer}>
         <Ionicons name="send" size={24} color={colors.teal} />
@@ -98,6 +183,105 @@ function Chat({ route }) {
   const [modal, setModal] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [, setUserLanguage] = useState('en');
+  const [recording, setRecording] = useState(null);
+
+  const startRecording = async () => {
+    try {
+      if (recording) {
+        await recording.stopAndUnloadAsync();
+        setRecording(null);
+      }
+
+      await Audio.requestPermissionsAsync();
+      await Audio.setAudioModeAsync({ allowsRecordingIOS: true, playsInSilentModeIOS: true });
+
+      const { recording: newRecording } = await Audio.Recording.createAsync(
+        Audio.RecordingOptionsPresets.HIGH_QUALITY
+      );
+
+      setRecording(newRecording);
+    } catch (err) {
+      console.error('Failed to start recording:', err);
+    }
+  };
+
+  const stopRecording = async () => {
+    try {
+      if (!recording) return;
+
+      await recording.stopAndUnloadAsync();
+      const uri = recording.getURI();
+      setRecording(null); // clear reference before sending
+
+      await sendAudioMessage(uri);
+    } catch (error) {
+      console.error('Error stopping recording:', error);
+    }
+  };
+
+  const sendAudioMessage = async (uri) => {
+    const chatDoc = await getDoc(doc(database, 'chats', route.params.id));
+    const chatData = chatDoc.data();
+    const receiverLanguage = chatData?.receiverLanguage || 'en';
+
+    const formData = new FormData();
+    formData.append('file', {
+      uri,
+      name: 'voice_message.wav',
+    });
+    formData.append('requested_language', receiverLanguage);
+    console.log(formData);
+    try {
+      let translatedText = ''; // default fallback
+
+      try {
+        const response = await fetch(`${link}/voice_to_text`, {
+          method: 'POST',
+          body: formData,
+        });
+
+        const text = await response.text();
+
+        if (text.startsWith('<')) {
+          console.error('Server returned HTML:', text);
+          throw new Error('Expected JSON but got HTML');
+        }
+
+        const data = JSON.parse(text);
+        translatedText = data?.text || '';
+      } catch (error) {
+        console.error('Voice translation failed:', error);
+        translatedText = ''; // ensures it's never undefined
+      }
+
+      const newMessage = {
+        _id: uuid.v4(),
+        createdAt: new Date(),
+        text: translatedText,
+        audio: uri,
+        originalText: '',
+        translatedText,
+        language: receiverLanguage,
+        user: {
+          _id: auth?.currentUser?.email,
+          name: auth?.currentUser?.displayName,
+        },
+      };
+
+      const chatMessages = GiftedChat.append(chatData.messages || [], [newMessage]);
+
+      await setDoc(
+        doc(database, 'chats', route.params.id),
+        {
+          messages: chatMessages,
+          lastUpdated: Date.now(),
+        },
+        { merge: true }
+      );
+    } catch (error) {
+      console.error('Voice translation failed:', error);
+    }
+  };
 
   useEffect(() => {
     const fetchUserLanguage = async () => {
@@ -374,7 +558,11 @@ function Chat({ route }) {
         renderSend={(props) => RenderAttach({ ...props, onPress: pickImage })}
         renderUsernameOnMessage
         renderAvatarOnTop
-        renderInputToolbar={(props) => RenderInputToolbar(props, handleEmojiPanel)}
+        // renderInputToolbar={(props) => RenderInputToolbar(props, handleEmojiPanel)}
+        renderInputToolbar={(props) =>
+          RenderInputToolbar(props, handleEmojiPanel, recording, startRecording, stopRecording)
+        }
+        renderMessageAudio={(props) => <RenderMessageAudio {...props} />}
         minInputToolbarHeight={56}
         scrollToBottom
         onPressActionButton={handleEmojiPanel}
