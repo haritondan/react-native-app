@@ -21,7 +21,7 @@ import {
 
 import { colors } from '../config/constants';
 import { auth, database } from '../config/firebase';
-const link = "https://0196-195-22-251-42.ngrok-free.app";
+const link = "https://7d08-94-243-69-225.ngrok-free.app";
 
 const RenderLoadingUpload = () => (
   <View style={styles.loadingContainerUpload}>
@@ -224,10 +224,16 @@ function Chat({ route }) {
     const receiverLanguage = chatData?.receiverLanguage || 'en';
 
     const formData = new FormData();
-    formData.append('file', {
-      uri: Platform.OS === 'ios' ? uri.replace('file://', '') : uri, 
-      name: 'voice_message.wav',
-      type: 'audio/wav',
+    formData.append("file", {
+      uri,
+      name:
+        Platform.OS === "ios"
+          ? "voice_message.caf"     
+          : "voice_message.m4a",    
+      type:
+        Platform.OS === "ios"
+          ? "audio/x-caf"
+          : "audio/mp4",          
     });
     formData.append('requested_language', receiverLanguage);
     console.log(formData);
